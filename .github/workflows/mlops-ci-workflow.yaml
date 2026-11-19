@@ -45,17 +45,12 @@ jobs:
             --output data/processed/featured_house_data.csv \
             --preprocessor models/trained/preprocessor.pkl
 
-      - name: Train model with MLflow
+      - name: Start MLflow with Docker Compose
+        run: docker compose -f deployment/mlflow/docker-compose.yaml up --detach
+
+      - name: Wait for MLflow
         run: |
           set -euo pipefail
-          mlflow server \
-            --backend-store-uri "sqlite:///${RUNNER_TEMP}/mlflow.db" \
-            --default-artifact-root "${RUNNER_TEMP}/mlflow-artifacts" \
-            --host 127.0.0.1 \
-            --port 5555 &
-          mlflow_pid=$!
-          trap 'kill "$mlflow_pid"; wait "$mlflow_pid" || true' EXIT
-
           for attempt in $(seq 1 30); do
             if curl --silent --fail http://127.0.0.1:5555/ >/dev/null; then
               break
@@ -67,8 +62,14 @@ jobs:
             sleep 1
           done
 
+      - name: Train model
+        run: |
           python src/models/train_model.py \
             --config configs/model_config.yaml \
             --data data/processed/featured_house_data.csv \
             --models-dir models \
             --mlflow-tracking-uri http://127.0.0.1:5555
+
+      - name: Stop MLflow
+        if: always()
+        run: docker compose -f deployment/mlflow/docker-compose.yaml down
