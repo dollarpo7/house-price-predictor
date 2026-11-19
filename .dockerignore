@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+venv
+**/__pycache__
+*.py[cod]
+data
+notebooks
+deployment
+streamlit_app
+configs
+src/data
+src/features
+src/models
+models/trained/README.md

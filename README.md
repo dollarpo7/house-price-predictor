@@ -163,6 +163,15 @@ curl -X POST "http://localhost:8000/predict" \
 
 Be sure to replace `http://localhost:8000/predict` with actual endpoint based on where its running. 
 
+### CI image publishing
+
+On successful pushes to `main`, GitHub Actions builds the FastAPI image with the newly trained model and preprocessor, then publishes it to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/dollarpo7/house-price-predictor:latest
+```
+
+The workflow also tags each image with the commit SHA. Pull requests build the image for validation but do not publish it. The published package needs to be public to pull it without authentication.
 
 ## 🧠 Learn More About MLOps
 
