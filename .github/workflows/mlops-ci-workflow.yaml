@@ -35,11 +35,40 @@ jobs:
       - name: Check Python syntax
         run: python -m compileall -q src streamlit_app
 
-      # - name: Smoke-test data and feature pipelines
-      #   run: |
-      #     python src/data/run_processing.py
-      #     temp_dir="$(mktemp -d)"
-      #     python src/features/engineer.py \
-      #       --input data/processed/cleaned_house_data.csv \
-      #       --output "$temp_dir/featured_house_data.csv" \
-      #       --preprocessor "$temp_dir/preprocessor.pkl"
+      - name: Process data
+        run: python src/data/run_processing.py
+
+      - name: Engineer features
+        run: |
+          python src/features/engineer.py \
+            --input data/processed/cleaned_house_data.csv \
+            --output data/processed/featured_house_data.csv \
+            --preprocessor models/trained/preprocessor.pkl
+
+      - name: Train model with MLflow
+        run: |
+          set -euo pipefail
+          mlflow server \
+            --backend-store-uri "sqlite:///${RUNNER_TEMP}/mlflow.db" \
+            --default-artifact-root "${RUNNER_TEMP}/mlflow-artifacts" \
+            --host 127.0.0.1 \
+            --port 5555 &
+          mlflow_pid=$!
+          trap 'kill "$mlflow_pid"; wait "$mlflow_pid" || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:5555/ >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "MLflow server did not become ready" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+          python src/models/train_model.py \
+            --config configs/model_config.yaml \
+            --data data/processed/featured_house_data.csv \
+            --models-dir models \
+            --mlflow-tracking-uri http://127.0.0.1:5555
